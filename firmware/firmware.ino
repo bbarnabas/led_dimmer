@@ -16,6 +16,7 @@ int ledValue = 1023;
 bool flagdim = false;
 bool flagon = false;
 bool up = true;
+bool message = false;
 bool turn_on_full = false;
 uint16_t cnt = 0;
 
@@ -83,7 +84,7 @@ void setup() {
 
 void loop() {
   ArduinoOTA.handle();
-  /*
+  
   cnt = 0;
   while(analogRead(A0)>512)
   {
@@ -95,60 +96,64 @@ void loop() {
       else if (cnt > 200){
           turn_on_full = false;
           if(up){
-            if(++ledValue>1023){
+            if(++value>1023){
               up = false;
-              ledValue=1023;
+              value=1023;
             }
           }else{
-            if(--ledValue<=1){
+            if(--value<=1){
               up = true;
-              ledValue=0;
+              value=0;
             }
           }
-          analogWrite(ledPin, ledValue);
-          analogWrite(pwmPin, 1023-ledValue);
+          analogWrite(ledPin, value);
+          analogWrite(pwmPin, 1023-value);
       }
+      valueOld = value;
   }
   delay(4);
   if(turn_on_full)
   {
-    if(ledValue == 1023){
+    if(value == 1023){
       up = false;
-      ledValue = 0;
+      value = 0;
     }else{
       up = true;
-      ledValue = 1023;
+      value = 1023;
     }
-    analogWrite(ledPin, ledValue);
-    analogWrite(pwmPin, 1023-ledValue);
+    analogWrite(ledPin, value);
+    analogWrite(pwmPin, 1023-value);
     turn_on_full = false;
   }
-  */
-  if((value == 1023 || value == 0) && (value!= valueOld)){
-    if(value == 1023){
-      while(value!=valueOld){
-        analogWrite(pwmPin, valueOld);
-        valueOld++;
-        delay(1);
-      }
-    }else{
-      if(value == 0){
+
+  if(message){
+    message = false;
+    if((value == 1023 || value == 0) && (value!= valueOld)){
+      if(value == 1023){
         while(value!=valueOld){
           analogWrite(pwmPin, valueOld);
-          valueOld--;
+          valueOld++;
           delay(1);
         }
+      }else{
+        if(value == 0){
+          while(value!=valueOld){
+            analogWrite(pwmPin, valueOld);
+            valueOld--;
+            delay(1);
+          }
+        }
       }
+    }else{
+      analogWrite(pwmPin, value);
     }
-  }else{
-    analogWrite(pwmPin, value);
   }
-
+  
   WiFiClient client = server.available();
   if (!client) {
     return;
   }
- 
+
   // Wait until the client sends some data
   Serial.println("new client");
   while(!client.available()){
@@ -163,6 +168,7 @@ void loop() {
  
   // Match the request
   if(request.indexOf("/LED=") != -1){
+    message = true;
     valueOld = value;
     value = request.substring(request.indexOf("/LED=")+5,request.indexOf("HTTP")-1).toInt();
     if(value > 1023){
