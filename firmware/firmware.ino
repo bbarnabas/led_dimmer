@@ -1,14 +1,14 @@
 #define ledPin 2
 #define pwmPin 15
 #define irPin A0
+
 #include <ESP8266WiFi.h>
-#include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 
-// Replace with your network credentials
-const char* ssid = "ssid";
-const char* password = "password";
+//SSID of your network
+char ssid[] = "ssid"; //SSID of your Wi-Fi router
+char pass[] = "password"; //Password of your Wi-Fi router
+WiFiServer server(80);
 int value = 0;
 int valueOld = 0;
 int raw = 0;
@@ -26,16 +26,39 @@ void setup() {
   analogWrite(ledPin, 1023);
   analogWrite(pwmPin, 0);
   Serial.begin(115200);
-  Serial.println("Booting");
+  delay(10);
+
+  // Connect to Wi-Fi network
+  Serial.println();
+  Serial.println();
+  Serial.print("Connecting to...");
+  Serial.println(ssid);
+
   WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
+  WiFi.begin(ssid, pass);
+
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
     Serial.println("Connection Failed! Rebooting...");
     delay(5000);
     ESP.restart();
   }
 
-  ArduinoOTA.onStart([]() {
+  Serial.println("");
+  Serial.println("Wi-Fi connected successfully");
+
+  // Start the server
+  server.begin();
+  Serial.println("Server started");
+ 
+  // Print the IP address
+  Serial.print("Use this URL : ");
+  Serial.print("http://");
+  Serial.print(WiFi.localIP());
+  Serial.println("/");
+
+   //ArduinoOTA.setHostname("WemosD1");
+   ArduinoOTA.setPassword((const char *)"");
+   ArduinoOTA.onStart([]() {
     Serial.println("Start");
   });
   ArduinoOTA.onEnd([]() {
@@ -60,6 +83,7 @@ void setup() {
 
 void loop() {
   ArduinoOTA.handle();
+  /*
   cnt = 0;
   while(analogRead(A0)>512)
   {
@@ -99,5 +123,67 @@ void loop() {
     analogWrite(pwmPin, 1023-ledValue);
     turn_on_full = false;
   }
-}
+  */
+  if((value == 1023 || value == 0) && (value!= valueOld)){
+    if(value == 1023){
+      while(value!=valueOld){
+        analogWrite(pwmPin, valueOld);
+        valueOld++;
+        delay(1);
+      }
+    }else{
+      if(value == 0){
+        while(value!=valueOld){
+          analogWrite(pwmPin, valueOld);
+          valueOld--;
+          delay(1);
+        }
+      }
+    }
+  }else{
+    analogWrite(pwmPin, value);
+  }
 
+  WiFiClient client = server.available();
+  if (!client) {
+    return;
+  }
+ 
+  // Wait until the client sends some data
+  Serial.println("new client");
+  while(!client.available()){
+    delay(1);
+    Serial.print(".");
+  }
+  Serial.println("client available");
+  // Read the first line of the request
+  String request = client.readStringUntil('\r');
+  Serial.println(request);
+  client.flush();
+ 
+  // Match the request
+  if(request.indexOf("/LED=") != -1){
+    valueOld = value;
+    value = request.substring(request.indexOf("/LED=")+5,request.indexOf("HTTP")-1).toInt();
+    if(value > 1023){
+      value = 1023;
+    } else if (value < 0){
+      value = 0;
+    }
+  }
+  
+  // Return the response
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: text/html");
+  client.println(""); //  do not forget this one
+  client.println("<!DOCTYPE HTML>");
+  client.println("<html>");
+ 
+  client.print("Led pin is now: ");
+  client.print(value);
+  
+  delay(1);
+  Serial.println("Client disconnected");
+  Serial.println("");
+
+}
